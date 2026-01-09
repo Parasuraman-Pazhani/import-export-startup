@@ -1,20 +1,20 @@
 from flask import Flask, render_template, request, redirect, session
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from werkzeug.security import generate_password_hash, check_password_hash
+import json
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "IMPORTEXPORT_STARTUP_2026"
 
-scope = ["https://spreadsheets.google.com/feeds",
-         "https://www.googleapis.com/auth/drive"]
+DB_FILE = "database/users.json"
 
-creds = ServiceAccountCredentials.from_json_keyfile_name(
-    "google_drive/service_account.json", scope)
+def load_users():
+    with open(DB_FILE) as f:
+        return json.load(f)
 
-client = gspread.authorize(creds)
-sheet = client.open("IMPORT_EXPORT_USERS").sheet1
+def save_users(data):
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -22,10 +22,12 @@ def login():
     if request.method == "POST":
         u = request.form['username']
         p = request.form['password']
-        for row in sheet.get_all_records():
-            if row['username'] == u and check_password_hash(row['password_hash'], p):
+
+        users = load_users()
+        for user in users:
+            if user['username'] == u and user['password_hash'] == p:
                 session['user'] = u
-                session['role'] = row['role']
+                session['role'] = user['role']
                 return redirect("/dashboard")
     return render_template("login.html")
 
@@ -34,8 +36,16 @@ def login():
 def register():
     if request.method == "POST":
         u = request.form['username']
-        p = generate_password_hash(request.form['password'])
-        sheet.append_row([u, p, "staff", datetime.now().strftime("%Y-%m-%d")])
+        p = request.form['password']
+
+        users = load_users()
+        users.append({
+            "username": u,
+            "password_hash": p,
+            "role": "staff",
+            "created_at": datetime.now().strftime("%Y-%m-%d")
+        })
+        save_users(users)
         return redirect("/")
     return render_template("register.html")
 
@@ -51,7 +61,8 @@ def dashboard():
 def admin():
     if session.get("role") != "admin":
         return redirect("/")
-    return render_template("admin.html", users=sheet.get_all_records())
+    users = load_users()
+    return render_template("admin.html", users=users)
 
 
 @app.route("/logout")
@@ -60,4 +71,5 @@ def logout():
     return redirect("/")
 
 
-app.run(debug=True)
+if __name__ == "__main__":
+    app.run(debug=True)
