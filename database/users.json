@@ -1,0 +1,8 @@
+[
+  {
+    "username": "admin",
+    "password_hash": "admin",
+    "role": "admin",
+    "created_at": "2026-01-01"
+  }
+]
